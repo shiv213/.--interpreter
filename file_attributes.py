@@ -12,7 +12,8 @@ class VarType(Enum):
 	STRING = 1
 	COMMENT = 2
 
-class Operations(Enum):
+class Operation(Enum):
+	## Assignment and Logico-Mathematical Operations
 	ASSIGN = '='
 	NAND = 'Apfelstrudel'
 
@@ -22,30 +23,42 @@ class Operations(Enum):
 	DIVIDE = '.'
 
 	ADD_ASSIGN = '+='
-	SUBTRACT_ASSIGN = '-'
-	MULTIPLY_ASSIGN = '_'
-	DIVIDE_ASSIGN = '.'
+	SUBTRACT_ASSIGN = '-='
+	MULTIPLY_ASSIGN = '_='
+	DIVIDE_ASSIGN = '.='
 
+	## MARK - Custom Operations
+	PRINT = 'print'
 
 class Logic(Enum):
+	## Program Logic Operations
 	WHILE = 'kurt'
 	IF_THEN = 'eiffelturm'
 	UNTIL_DO = 'niemals!'
 	IF_THEN_ELSE = 'seltsam'
 
-	# the *less used 
+	### the *less used* logical operators :p
 	IF_THEN_UNLESS = 'sonderbar'
 	IF_THEN_PROVIDED = 'sinnlos'
 	WHILE_DO_UNLESS = 'nutzlos' # mans lost his nutz
 
+	EQUAL = '='  # equality check symbol
+	LESS_THAN_EQUAL = ' =' # confusing but this is actually <=
 
-class Variable:
 
-	def __init__(self, name, var_type, size, content):
+class DCVariable:
+
+	def __init__(self, name, date_created, size, content):
 		self.name = name
-		self.var_type = var_type
 		self.size = size
 		self.content = content
+
+		if date_created == "1991":
+			self.var_type = VarType.INT
+		elif date_create == "1992":
+			self.var_type = VarType.STRING
+		else:
+			self.var_type = VarType.COMMENT
 
 	def get_value():
 		if self.var_type == VarType.INT:
@@ -55,25 +68,41 @@ class Variable:
 		else:
 			return None # comments have no value
 
-class VariableRef:
+class DCVariableRef:
 	def __init__(self, name):
-		self.name = name
+		self.name = name # should correspond to an actual variable
 
-class DCFunctionCall:
+class DCOperation:
 
 	"""
-	objects: array of other values that nest in the function call
-	i.e. DCString, DCInteger, DCComment, and other DCFunctionCalls
+	params: array of other values that nest in the function call
+	i.e. DCVariableRef, and other DCOperations
 	
 	"""
-	def __init__(self, name, var_type, size, content):
-		self.func_type = Operation[name]
+	def __init__(self, name: str, params: list):
+		self.func_type = Operation(name)
+		self.params = params
+
+class DCProgramLogicExpression:
+
+	def __init__(self, name: str, sub_exprs: list):
+		self.expr_type = Logic(name)
+		self.sub_exprs = sub_exprs
+
 
 class Program:
 
-	def __init__(self, bound_variables: dict, function_calls: list):
+	def __init__(self, bound_variables: dict, instructions: list):
 		self.bound_variables = bound_variables
-		self.function_calls
+		self.instructions = instructions
+
+
+def run(program: Program):
+	"""
+	The one magical function to rule them all. This takes in a program and runs it.
+	"""
+	pass
+
 
 def get_file_attrib(file_path):
 	try:
@@ -81,18 +110,11 @@ def get_file_attrib(file_path):
 	except IOError:
 		print("failed to get information about", file_path)
 	else:
-		year = time.asctime(time.localtime(st[ST_MTIME]))[-4:]
 		name = os.path.splitext(os.path.basename(file_path))[0]
+		year = time.asctime(time.localtime(st[ST_MTIME]))[-4:]	
 		size = st[ST_SIZE]
 		data = open(file_path, "r").read()
-		# data = os.read(file_path)
 
-		if year == "1991":
-			var_type = VarType.INT
-		elif year == "1992":
-			var_type = VarType.STRING
-		else:
-			var_type = VarType.COMMENT
 			
 		# print("prefix:", prefix)
 		# print("file name:", name)
@@ -107,7 +129,7 @@ def get_file_attrib(file_path):
 			# 1992 -> string
 			# Files with creation dates outside [1991,1992] are ignored and can be used as comments.
 
-		return name, var_type, size, data
+		return name, year, size, data
 
 def get_dir_attrib(dir_path):
 	filename = os.path.splitext(os.path.basename(dir_path))
@@ -169,7 +191,7 @@ def get_program_directory_structure(root_path):
 	Psuedocode for creating program
 	
 	vars_arr = []
-	functionCallsArr = p[]
+	instructions = []
 
 	for each file/variable/bound_literal in root directory:
 		make a `Variable` obj
@@ -180,11 +202,11 @@ def get_program_directory_structure(root_path):
 		for each sub_directory:
 			create VariableRef obj -> currentVarRefs
 	
-		create FunctionCall obj, pass currentVarRefs and related info
+		create DCOperation obj or DCProgramLogicExpression (using try:except), pass name, currentVarRefs and params or sub_expressions
 
-		store to functionCallsArr
+		store to instructions array
 
-	create Program obj, pass in vars_arr, functionCallsArr
+	create Program obj, pass in vars_arr, instructions
 	"""
 
 	for root, dirs, files in os.walk(root_path, topdown=True):

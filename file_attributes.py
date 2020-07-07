@@ -49,7 +49,7 @@ class Variable:
 
 	def get_value():
 		if self.var_type == VarType.INT:
-			return self.size
+			return int(self.size)
 		elif self.var_Type == VarType.STRING:
 			return str(self.content)
 		else:
@@ -60,7 +60,6 @@ class VariableRef:
 		self.name = name
 
 class DCFunctionCall:
-	
 
 	"""
 	objects: array of other values that nest in the function call

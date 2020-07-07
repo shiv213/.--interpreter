@@ -208,18 +208,25 @@ def get_program_directory_structure(root_path):
 
 	create Program obj, pass in vars_arr, instructions
 	"""
+	vars_arr = []
+	instructions = []
 
-	for root, dirs, files in os.walk(root_path, topdown=True):
-		print(root)
-		print([get_dir_attrib(os.path.join(root, d)) for d in dirs])
-		print([get_file_attrib(os.path.join(root, f)) for f in files])
-		print("--")
-		for name in files:
-			print(os.path.join(root, name))
-	for name in dirs:
-		print(os.path.join(root, name))
+	for filename in glob.iglob("./test" + '**/*', recursive=True):
+		if os.path.isfile(filename):
+			DCVariabe
+			print(get_file_attrib(filename))
+
+	# for root, dirs, files in os.walk(root_path, topdown=True):
+	# 	print(root)
+	# 	print([get_dir_attrib(os.path.join(root, d)) for d in dirs])
+	# 	print([get_file_attrib(os.path.join(root, f)) for f in files])
+	# 	print("--")
+	# 	for name in files:
+	# 		print(os.path.join(root, name))
+	# for name in dirs:
+	# 	print(os.path.join(root, name))
 		
-	print(os.listdir(root_path))
+	# print(os.listdir(root_path))
 	return 
 	
 

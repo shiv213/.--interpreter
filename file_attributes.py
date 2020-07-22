@@ -1,17 +1,28 @@
-import os, time
+import os, time, sys
 from stat import *  # ST_SIZE etc
 from enum import Enum, auto
 import glob
+from functools import reduce
 
 # abstract base class. DO NOT INSTANTIATE
 
 # .: -> DotCol -> DC
 
 
+"""
+We might need this
+sys.setrecursionlimit(1500)
+"""
+
+class DCException(Exception):
+	def __init__(self, ):
+		pass
+
+
 class VarType(Enum):
-	INT = 0
-	STRING = 1
-	COMMENT = 2
+	INT = "1991"
+	STRING = "1992"
+	COMMENT = ""
 
 
 class Operation(Enum):
@@ -46,7 +57,7 @@ class Logic(Enum):
 	WHILE_DO_UNLESS = 'nutzlos'  # mans lost his nutz
 
 	EQUAL = '='  # equality check symbol
-	LESS_THAN_EQUAL = ' ='  # confusing but this is actually <=
+	LESS_THAN_EQUAL = ' ='  # confusing but this is actually <= (_=)
 
 
 class RunState(Enum):
@@ -55,10 +66,11 @@ class RunState(Enum):
 	ERROR = auto()
 
 class DCVariable:
-	def __init__(self, name, date_created, size, content):
+	def __init__(self, name, date_created, size, content, is_literal = False):
 		self.name = name
 		self.size = size
 		self.content = content
+		self.is_literal = is_literal
 
 		if date_created == "1991":
 			self.var_type = VarType.INT
@@ -67,6 +79,17 @@ class DCVariable:
 		else:
 			self.var_type = VarType.COMMENT
 
+	@staticmethod
+	def make_literal(data):
+
+		if type(data) == int:
+			return DCVariable('', VarType.INT.value, data, '?' * data, True)
+		elif type(data) == str:
+			return DCVariable('', VarType.STRING.value, len(data), data, True)
+		else:
+			raise DCException('ok dude, you really had to make a literal out of: {}, when you know it has to be a string or int. smh my head dude'.format(data))
+
+
 	def get_value(self):
 		if self.var_type == VarType.INT:
 			return int(self.size)
@@ -74,6 +97,18 @@ class DCVariable:
 			return str(self.content)
 		else:
 			return None  # comments have no value
+
+	def set_value(self, new_value):
+		if self.is_literal:
+			raise DCException('hey u dumbass you tried to rebind a constant  to another constant. wtf is wrong with you.')
+		else:
+			if type(new_value) == int:
+				self.size = new_value
+			elif type(new_value) == str:
+				self.content = new_value
+				self.size = len(new_value)
+			else:
+				raise DCException('hey what kinda dumbass data: ({}) are you giving me you hoe'.format(str(new_value)))
 
 	def __repr__(self):
 		return 'DCVariable {' + 'type: {}, value: {}'.format(
@@ -84,23 +119,33 @@ class DCVariableRef:
 	def __init__(self, name):
 		self.name = name  # should correspond to an actual variable
 
+	def __repr__(self):
+		return 'DCVariableRef {' + 'name: {}'.format(self.name) + '}'
+	
 
-class DCOperation:
+class DCExpression:
 	"""
 	params: array of other values that nest in the function call
-	i.e. DCVariableRef, and other DCOperations
+	i.e. DCVariableRef, and other DCExpressions
 	"""
 
-	def __init__(self, prefix: str, name: str, params: list):
-		self.prefix = prefix
-		self.func_type = Operation(name)
-		self.params = params
+	def __init__(self, name: str, params: list):
+		self.name = name # string of operation name
+		self.params = params # literals and varRefs and other DCExpressions within expression
+	
+	@property
+	def is_control_flow(self):
+		try:
+			Logic(self.name)
+			return True
+		except:
+			return False
 
 
 
 class ProgramDirStructure:
-	def __init__(self, bound_variables: dict, expressions: list):
-		self.bound_variables = bound_variables # Dict[str, DCVariable]
+	def __init__(self, bound_variables: dict, expressions: dict):
+		self.bound_variables = bound_variables # Dict[str, DCVariable], where key is the name of the variable
 		self.expressions = expressions
 
 
@@ -125,35 +170,161 @@ class Runner:
 		self.cycle_count = 0
 		self.run_state = RunState.RUNNING
 
-	def eval(self, expr):
-		if type(expr) == DCOperation:
-			pass
-		elif type(expr) == DCVariableRef:
-			return self.program.bound_variables[expr.name]  # returns a DCVariable
-		elif type(expr) == DCVariable:
-			return expr.get_value()  # returns raw value
+	
+	def ref2var(self, ref) -> DCVariable:
+		assert type(ref) == DCVariableRef or DCVariable
+
+		if type(ref) == DCVariable:
+			return ref  # not a ref, just a variable.
+
+		if not ref.name in self.program.bound_variables:
+			raise DCException('hey man, unfortunately the variable you are looking for: ({}) cannot be reached at this time. please try again later.'.format(ref))
 		else:
-			self.run_state = RunState.ERROR
-			return None  # signals an error
+			return self.program.bound_variables[ref.name]  # going from dcvarref -> dcvar like a boss
 
 
-	def run(self):		
-		# assuming instructions 
+	
+	def eval(self, expr):
+		if type(expr) == DCExpression:
+			"""
+			assuming disambiguate logic vs operation and cast to appropriate enum here.
+			
+			2. switch on expression enum, perform desired operation
+				a. run eval on all params.
+			3. return result.
+
+			vait. but this will only work for "Assignment and Logico-Mathematical Operations", and not "Program Logic"
+			"""
+			# ASSUMING ONLY OPERATIONS!! NO LOGIC
+			try:
+				op = Operation(expr.name)
+			except ValueError:
+				return self.do_control_flow(expr)
+				# raise DCException('tried to evaluate a Logic expr')
+
+
+			if op == Operation.ASSIGN:
+				assignee = self.ref2var(expr.params[0])
+				val2assign = self.eval(expr.params[1])
+				
+				assert type(assignee) == DCVariableRef
+				assert type(val2assign) == DCVariableRef or type(val2assign) == DCVariable
+								
+				assignee.set_value(val2assign.get_value())
+				
+				return None  # assignment doesn't return anything (i would hope)
+			
+			elif op == Operation.NAND:
+				# i guess its just bitwise nand of ints
+				a = self.eval(expr.params[0])
+				b = self.eval(expr.params[0])
+
+				assert a.var_type == VarType.INT
+				assert b.var_type == VarType.INT
+
+				return DCVariable.make_literal(~(a.get_value & b.get_value))
+
+
+			elif op == Operation.PRINT:
+				# i'm going to assume the print instruction is n-ary, and print all args
+				vals = map(lambda x: self.eval(x), expr.params)
+				for val in vals:
+					print(val.get_value())
+				
+				return None
+
+			# i'm semi i stay automatic
+			# money add then multiply
+
+			elif op == Operation.ADD:			
+				a = self.eval(expr.params[0])
+				b = self.eval(expr.params[1])
+				
+				assert a.var_type == VarType.INT and b.var_type == VarType.INT
+
+				return DCVariable.make_literal(a.get_value() + b.get_value())
+
+			elif op == Operation.ADD_ASSIGN:
+				a = self.eval(expr.params[0])
+				b = self.eval(expr.params[1])
+				
+				assert a.var_type == VarType.INT and b.var_type == VarType.INT
+
+				a.set_value(a.get_value() + b.get_value())
+
+				return None
+			
+			elif op == Operation.SUBTRACT:			
+				a = self.eval(expr.params[0])
+				b = self.eval(expr.params[1])
+				
+				assert a.var_type == VarType.INT and b.var_type == VarType.INT
+
+				return DCVariable.make_literal(a.get_value - b.get_value)
+			
+			elif op == Operation.SUBTRACT_ASSIGN:
+				a = self.eval(expr.params[0])
+				b = self.eval(expr.params[1])
+				
+				assert a.var_type == VarType.INT and b.var_type == VarType.INT
+
+				a.set_value(a.get_value() - b.get_value())
+
+				return None
+
+			elif op == Operation.MULTIPLY:			
+				a = self.eval(expr.params[0])
+				b = self.eval(expr.params[1])
+				
+				assert a.var_type == VarType.INT and b.var_type == VarType.INT
+
+				return DCVariable.make_literal(a.get_value() * b.get_value())
+
+			elif op == Operation.MULTIPLY_ASSIGN:
+				a = self.eval(expr.params[0])
+				b = self.eval(expr.params[1])
+				
+				assert a.var_type == VarType.INT and b.var_type == VarType.INT
+
+				a.set_value(a.get_value() * b.get_value())
+
+				return None
+			
+
+		elif type(expr) == DCVariableRef:
+			return self.ref2var(expr)  # returns a DCVariable
+		elif type(expr) == DCVariable:
+			return expr  # returns the variable (base case)
+		else:
+			raise DCException('Invalid expr type of expression {}'.format(expr))
+
+		
+
+
+	def do_control_flow(self, expr):
+		assert type(expr) == DCExpression
+		
+		try:
+			logic_op = Logic(expr.name)
+		except ValueError:
+			return self.eval(expr)
+
+		if logic_op == Logic.WHILE:
+			pass
+
+
+
+	def run(self):
+
+
+		
+
 		for expr in self.program.expressions:
 			self.current_expr = expr
-			if type(expr) == DCOperation:
-				pass
-			elif type(expr) == DCVariableRef:
-				pass
-			elif type(expr) == DCVariable:
-				pass
-			else:
-				self.run_state = RunState.ERROR
-				break
+
+			self.eval(expr)
 			
 			self.cycle_count += 1
-		
-		
 
 
 def get_file_attrib(file_path):
@@ -183,44 +354,67 @@ def get_file_attrib(file_path):
 		return name, year, size, data
 
 
-def get_dir_attrib(dir_path):
-    filename = os.path.splitext(os.path.basename(dir_path))
-    prefix = filename[0]
-    dir_name = filename[1]
-    return prefix, dir_name
+# def get_dir_attrib(dir_path):
+#     filename = os.path.splitext(os.path.basename(dir_path))
+#     prefix = filename[0]
+#     dir_name = filename[1]
+#     return prefix, dir_name
 
 
-def get_program_directory_structure(root_path):
+def get_program_directory_structure(rootdir):
+    """
+    Creates a nested dictionary that represents the folder structure of rootdir
+    """
+    dir = {}
+    rootdir = rootdir.rstrip(os.sep)
+    start = rootdir.rfind(os.sep) + 1
+    for path, dirs, files in os.walk(rootdir):
+        folders = path[start:].split(os.sep)
+        subdir = dict.fromkeys(files)
+        parent = reduce(dict.get, folders[:-1], dir)
+        parent[folders[-1]] = subdir
+    return dir
+
+			
+def some_fresh_bullshit(root_path):
 	vars_dict = {}
 	# instructions = []
-	
+	expression_names = {}
+	program_dir_struct = {}
 	for root, dirs, files in os.walk(root_path, topdown=True):
+		program_dir_struct[root]
 		print("ROOT: ", root)
 		print("DIRS: ", dirs)
-		print("FILES: ", files)
 		# technically, there are an arbitrary num of vars possible
 		# however there is a constant num of logical operations and expressions
-		operations = [list(Operation.__members__.keys())]
-		logic = [list(Logic.__members__.keys())]
-		for d in dirs:
-			if (os.path.basename(d).partition(".")[2] in operations):
-				print(get_dir_attrib(d))
+		expressions = [e.value for e in Operation]
+		expressions.extend([e.value for e in Logic])
+		print("EXPRESSIONS:")
 		print('..............................')
-		print([get_dir_attrib(os.path.join(root, d)) for d in dirs])
+		filepath = root.split('/')
+
+		if len(dirs) > 0:
+			for d in dirs:
+				if (str(d).partition(".")[2] in expressions):
+					print(str(d).partition(".")[2], "is an expression")
+					expression_names.update({str(d).partition(".")[2]: []}) #..
+				else:
+					DCVariableRef(str(d).partition(".")[0])
+		print('..............................')
+		print("FILES: ")
 		if len(files) > 0:
 			print(files)
 			for f in files:
-				vars_dict.update({os.path.splitext(os.path.basename(os.path.join(root, f)))[0]: DCVariable(*get_file_attrib(os.path.join(root, f)))})
-		# vars_dict.update({os.path.splitext(os.path.basename(os.path.join(root, f)))[0]: [DCVariable(*get_file_attrib(os.path.join(root, f))) for f in files]})
-		print("------------------------------")
-		# for name in dirs:
-		# 	print(os.path.join(root, name))
-	# print(vars_dict)
+				vars_dict.update({os.path.splitext(os.path.basename(os.path.join(root, f)))[0]: DCVariable(*get_file_attrib(os.path.join(root, f)))})  # check: initial pass looks ok (handling bound_vars)
+		
+		print('==============================')
+	print(vars_dict)
 	# print(os.listdir(root_path))
-	
-	# DCOperation(*get_dir_attrib(d), )
 
-	return "BRUH"
+	# DCExpression(*get_dir_attrib(d), )
+	# also you need to be returning a `ProgramDirStructure`, as opposed to the literal "BRUH LMAO"
+
+	return "BRUH LMAO"
 
 	
 
@@ -271,7 +465,7 @@ for each operation_directory:
 	for each sub_directory:
 		create VariableRef obj -> currentVarRefs
 
-	create DCOperation obj or DCProgramLogicExpression (using try:except), pass name, currentVarRefs and params or sub_expressions
+	create DCExpression obj or DCProgramLogicExpression (using try:except), pass name, currentVarRefs and params or sub_expressions
 
 	store to instructions array
 

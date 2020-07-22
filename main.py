@@ -1,7 +1,12 @@
 import file_attributes
+import pprint
 
-file_attributes.get_program_directory_structure("./test")
-# print(file_attributes.get_dir_attrib("./test/0.="))
+pp = pprint.PrettyPrinter()
+
+
+pp.pprint(file_attributes.get_program_directory_structure("./test"))
+
+
 
 # from program_generators import fibonacci
 
